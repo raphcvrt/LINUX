@@ -107,3 +107,47 @@ lost+found  sensitive1.txt  sensitive2.txt
 [root@localhost snapshot]# sudo cp /mnt/snapshot/sensitive1.txt /mnt/snapshot/sensitive2.txt /mnt/secure_data/
 ```
 3. (Pour agrandir le lv et le vg j'ai galéré toute la soirée sur des forums j'ai pas réussi meme ChatGPT il a pas resolu après jsuis ptetre un golmon)
+
+# Etape 3
+1. le script ressemble a ça et il a été entièrement fait par ChatGPT car je ne connais pas bash 
+```bash
+#!/bin/bash
+
+# Variables
+BACKUP_DIR="/backup"
+SOURCE_DIR="/mnt/secure_data"
+DATE=$(date +%Y%m%d)
+ARCHIVE_NAME="secure_data_${DATE}.tar.gz"
+
+# Vérifier si le répertoire de sauvegarde existe, sinon le créer
+if [ ! -d "$BACKUP_DIR" ]; then
+    echo "Le répertoire $BACKUP_DIR n'existe pas. Création en cours..."
+    mkdir -p "$BACKUP_DIR"
+fi
+
+# Créer l'archive en excluant les fichiers temporaires, logs et fichiers cachés
+echo "Création de l'archive dans $BACKUP_DIR/$ARCHIVE_NAME..."
+tar --exclude='*.tmp' --exclude='*.log' --exclude='.*' -czf "$BACKUP_DIR/$ARCHIVE_NAME" "$SOURCE_DIR"
+if [ $? -ne 0 ]; then
+    echo "Erreur lors de la création de l'archive."
+    exit 1
+fi
+echo "Archive créée avec succès."
+
+# Rotation des sauvegardes : conserver uniquement les 7 dernières
+echo "Rotation des sauvegardes : conservation des 7 dernières archives..."
+cd "$BACKUP_DIR" || exit 1
+ls -tp | grep -v '/$' | tail -n +8 | xargs -d '\n' -r rm --
+echo "Rotation terminée."
+```
+3. je le teste et le verifie 
+```bash
+[root@localhost home]# ./secure_backup.sh 
+Création de l'archive dans /backup/secure_data_20241125.tar.gz...
+tar: Removing leading `/' from member names
+Archive créée avec succès.
+Rotation des sauvegardes : conservation des 7 dernières archives...
+Rotation terminée.
+[root@localhost home]# ls /backup
+secure_data_20241125.tar.gz
+```
