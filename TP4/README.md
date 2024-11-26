@@ -109,7 +109,7 @@ lost+found  sensitive1.txt  sensitive2.txt
 3. (Pour agrandir le lv et le vg j'ai galéré toute la soirée sur des forums j'ai pas réussi meme ChatGPT il a pas resolu après jsuis ptetre un golmon)
 
 # Etape 3
-1. le script ressemble a ça et il a été entièrement fait par ChatGPT car je ne connais pas bash 
+1. le script ressemble a ça et il a été entièrement fait par ChatGPT car je ne connais pas bash, il ne conserve aussi que les 7 dernières sauvegardes
 ```bash
 #!/bin/bash
 
@@ -151,3 +151,59 @@ Rotation terminée.
 [root@localhost home]# ls /backup
 secure_data_20241125.tar.gz
 ```
+4. ajout de cette ligne dans le crontab pour que le script s'execute tout les jours de tout les mois a chaque jour de la semaine, à 
+3h et 0 minutes
+```sh
+0 3 * * * /home/secure_backup.sh
+```
+# Etape 4
+1. je rajoute une regle auditctl 
+```bash
+[root@localhost audit]# auditctl -w /etc -k accès_etc
+Old style watch rules are slower
+[root@localhost audit]# auditctl -l
+-w /etc -p rwxa -k accès_etc
+```
+2. je crée volontairement un evennement dans le /etc puis je le cherche dans les logs
+```sh
+[root@localhost audit]# sudo echo "paph sudios" > /etc/test1.txt
+[root@localhost audit]# cat /var/log/audit/audit.log | sudo ausearch -k accès_etc > /var/log/audit_etc.log
+[root@localhost audit]# cat /var/log/audit_etc.log
+----
+time->Mon Nov 25 20:28:33 2024
+type=PROCTITLE msg=audit(1732562913.983:1314): proctitle=617564697463746C002D77002F657463002D6B00616363C3A8735F657463
+type=SOCKADDR msg=audit(1732562913.983:1314): saddr=100000000000000000000000
+type=SYSCALL msg=audit(1732562913.983:1314): arch=c000003e syscall=44 success=yes exit=1072 a0=4 a1=7ffd8eeb6320 a2=430 a3=0 items=0 ppid=2310 pid=5739 auid=1001 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts0 ses=13 comm="auditctl" exe="/usr/sbin/auditctl" subj=unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023 key=(null)
+type=CONFIG_CHANGE msg=audit(1732562913.983:1314): auid=1001 ses=13 subj=unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023 op=add_rule key=616363C3A8735F657463 list=4 res=1
+
+```
+# Etape 5
+1. je verifie et configure le pare-feu pour les ports ssh htt et https (respectivement 22, 80 et 443)
+```sh
+[root@localhost audit]# sudo systemctl status firewalld
+● firewalld.service - firewalld - dynamic firewall daemon
+     Loaded: loaded (/usr/lib/systemd/system/firewalld.service; enabled; preset: enabled)
+     Active: active (running) since Mon 2024-11-25 14:08:11 CET; 6h ago
+       Docs: man:firewalld(1)
+   Main PID: 823 (firewalld)
+      Tasks: 2 (limit: 48902)
+     Memory: 42.9M
+        CPU: 814ms
+     CGroup: /system.slice/firewalld.service
+             └─823 /usr/bin/python3 -s /usr/sbin/firewalld --nofork --nopid
+
+Nov 25 14:08:10 localhost systemd[1]: Starting firewalld - dynamic firewall daemon...
+Nov 25 14:08:11 localhost systemd[1]: Started firewalld - dynamic firewall daemon.
+[root@localhost audit]# sudo firewall-cmd --add-port=80/tcp --permanent
+success
+[root@localhost audit]# sudo firewall-cmd --add-port=22/tcp --permanent
+success
+[root@localhost audit]# sudo firewall-cmd --add-port=443/tcp --permanent
+success
+[root@localhost audit]# sudo firewall-cmd --set-default-zone=drop
+success
+[root@localhost audit]# sudo firewall-cmd --reload
+success
+```
+2. Galere aussi
+3. Pour restreindre l'acces ssh a un certain range d'ip j'ai ajouté la ligne AllowUsers `*@192.168.1.*` dans `/etc/ssh/sshd_config`
