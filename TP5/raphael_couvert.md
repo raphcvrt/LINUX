@@ -58,49 +58,57 @@ je crée un script qui backup le disque principal montage pour vérifier le snap
 ```
 #!/bin/bash
 
-# Définir les paramètres du volume
-GROUPE_VOLUME="debian--vg"
-VOLUME_LOGIQUE="root"
-SNAPSHOT="root_snapshot"
-TAILLE_SNAPSHOT="2G"  # Taille à ajuster entre 1G et 5G
-POINT_DE_MONTAGE="/mnt/snapshot"
+# Configuration
+BACKUP_DIR="/mnt/snapshot_backup"  # Emplacement de sauvegarde
+SOURCE_DIR="/"                     # Répertoire source à sauvegarder
+DATE=$(date +%Y%m%d)               # Date du jour pour nommer les archives
+SNAPSHOT_NAME="backup_${DATE}.tar.gz"  # Nom de l'archive
+EXCLUDE_FILE="/home/paph/exclude_list.txt"  # Fichier d'exclusion
 
-# Créer un snapshot du volume logique
-echo "Création du snapshot..."
-sudo lvcreate --size $TAILLE_SNAPSHOT --snapshot --name $SNAPSHOT /dev/$GROUPE_VOLUME/$VOLUME_LOGIQUE
-
-# Vérification de la création du snapshot
-if [ $? -eq 0 ]; then
-    echo "Snapshot créé avec succès."
-else
-    echo "Erreur lors de la création du snapshot."
+# Préparation
+echo "Préparation de la sauvegarde..."
+sudo mkdir -p "$BACKUP_DIR"
+if ! sudo mount /dev/sdb1 "$BACKUP_DIR"; then
+    echo "Erreur : Impossible de monter /dev/sdb1. Vérifiez votre disque." >&2
     exit 1
 fi
 
-# Créer le répertoire de montage
-echo "Création du répertoire de montage..."
-sudo mkdir -p $POINT_DE_MONTAGE
+# Fichier d'exclusion
+cat <<EOF > "$EXCLUDE_FILE"
+/proc
+/sys
+/dev
+/tmp
+/run
+/media
+/mnt
+/lost+found
+$BACKUP_DIR
+EOF
+echo "Fichier d'exclusion créé : $EXCLUDE_FILE"
 
-# Monter le snapshot
-echo "Montage du snapshot..."
-sudo mount /dev/$GROUPE_VOLUME/$SNAPSHOT $POINT_DE_MONTAGE
-
-# Vérification du montage
-if mount | grep $POINT_DE_MONTAGE > /dev/null; then
-    echo "Snapshot monté avec succès."
-else
-    echo "Erreur lors du montage."
+# Création de la sauvegarde
+echo "Création de l'archive dans $BACKUP_DIR/$SNAPSHOT_NAME..."
+if ! sudo tar --exclude-from="$EXCLUDE_FILE" -czf "$BACKUP_DIR/$SNAPSHOT_NAME" "$SOURCE_DIR"; then
+    echo "Erreur : Échec de la création de l'archive." >&2
+    sudo umount "$BACKUP_DIR"
+    rm -f "$EXCLUDE_FILE"
     exit 1
 fi
+echo "Sauvegarde terminée avec succès : $BACKUP_DIR/$SNAPSHOT_NAME."
 
-# Faire une sauvegarde ici si nécessaire
+# Rotation des sauvegardes
+echo "Nettoyage des anciennes sauvegardes (conservation des 5 plus récentes)..."
+sudo ls -tp "$BACKUP_DIR" | grep -v '/$' | tail -n +6 | xargs -d '\n' -r sudo rm --
+echo "Rotation des sauvegardes terminée."
 
-# Démonter et supprimer le snapshot après utilisation
-echo "Démontage et suppression du snapshot..."
-sudo umount $POINT_DE_MONTAGE
-sudo lvremove -f /dev/$GROUPE_VOLUME/$SNAPSHOT
+# Nettoyage final
+echo "Démontage du disque et suppression des fichiers temporaires..."
+sudo umount "$BACKUP_DIR"
+rm -f "$EXCLUDE_FILE"
 
-echo "Snapshot supprimé."
+echo "Processus de sauvegarde terminé avec succès."
+
 ```
 
 je configure le crontab pour qu'il exécute le script tout les dimanche à minuit
