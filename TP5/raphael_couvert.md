@@ -58,56 +58,33 @@ je crée un script qui backup le disque principal montage pour vérifier le snap
 ```
 #!/bin/bash
 
-# Configuration
-BACKUP_DIR="/mnt/snapshot_backup"  # Emplacement de sauvegarde
-SOURCE_DIR="/"                     # Répertoire source à sauvegarder
-DATE=$(date +%Y%m%d)               # Date du jour pour nommer les archives
-SNAPSHOT_NAME="backup_${DATE}.tar.gz"  # Nom de l'archive
-EXCLUDE_FILE="/home/paph/exclude_list.txt"  # Fichier d'exclusion
+# Variables
+BACKUP_DIR="/mnt/snapshot_backup"
+SOURCE_DIR="/"
+DATE=$(date +%Y%m%d)
+ARCHIVE_NAME="backup_root_${DATE}.tar.gz"
 
-# Préparation
-echo "Préparation de la sauvegarde..."
-sudo mkdir -p "$BACKUP_DIR"
-if ! sudo mount /dev/sdb1 "$BACKUP_DIR"; then
-    echo "Erreur : Impossible de monter /dev/sdb1. Vérifiez votre disque." >&2
-    exit 1
+# Vérifier si le répertoire de sauvegarde existe, sinon le créer
+if [ ! -d "$BACKUP_DIR" ]; then
+    echo "Le répertoire $BACKUP_DIR n'existe pas. Création en cours..."
+    mkdir -p "$BACKUP_DIR"
 fi
 
-# Fichier d'exclusion
-cat <<EOF > "$EXCLUDE_FILE"
-/proc
-/sys
-/dev
-/tmp
-/run
-/media
-/mnt
-/lost+found
-$BACKUP_DIR
-EOF
-echo "Fichier d'exclusion créé : $EXCLUDE_FILE"
-
-# Création de la sauvegarde
-echo "Création de l'archive dans $BACKUP_DIR/$SNAPSHOT_NAME..."
-if ! sudo tar --exclude-from="$EXCLUDE_FILE" -czf "$BACKUP_DIR/$SNAPSHOT_NAME" "$SOURCE_DIR"; then
-    echo "Erreur : Échec de la création de l'archive." >&2
-    sudo umount "$BACKUP_DIR"
-    rm -f "$EXCLUDE_FILE"
+# Créer une archive complète
+echo "Création de l'archive complète dans $BACKUP_DIR/$ARCHIVE_NAME..."
+tar -czf "$BACKUP_DIR/$ARCHIVE_NAME" "$SOURCE_DIR"
+if [ $? -ne 0 ]; then
+    echo "Erreur lors de la création de l'archive."
     exit 1
 fi
-echo "Sauvegarde terminée avec succès : $BACKUP_DIR/$SNAPSHOT_NAME."
+echo "Archive créée avec succès."
 
-# Rotation des sauvegardes
-echo "Nettoyage des anciennes sauvegardes (conservation des 5 plus récentes)..."
-sudo ls -tp "$BACKUP_DIR" | grep -v '/$' | tail -n +6 | xargs -d '\n' -r sudo rm --
-echo "Rotation des sauvegardes terminée."
+# Rotation des sauvegardes : conserver uniquement les 7 dernières
+echo "Rotation des sauvegardes : conservation des 7 dernières archives..."
+cd "$BACKUP_DIR" || exit 1
+ls -tp | grep -v '/$' | tail -n +8 | xargs -d '\n' -r rm --
+echo "Rotation terminée."
 
-# Nettoyage final
-echo "Démontage du disque et suppression des fichiers temporaires..."
-sudo umount "$BACKUP_DIR"
-rm -f "$EXCLUDE_FILE"
-
-echo "Processus de sauvegarde terminé avec succès."
 
 ```
 
